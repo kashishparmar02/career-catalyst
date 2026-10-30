@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: career
+          POSTGRES_PASSWORD: career
+          POSTGRES_DB: career_catalyst
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U career -d career_catalyst"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://career:career@localhost:5432/career_catalyst
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy src
+      - run: uv run pytest -q
+      - run: docker build -t career-catalyst-api .
