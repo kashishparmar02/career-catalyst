@@ -1,4 +1,4 @@
-"""Version 1 of the public REST API: jobs and applications."""
+"""Version 1 of the public REST API: jobs, applications and their stage history."""
 
 import uuid
 from typing import Annotated
@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from career_catalyst.db import get_session
 from career_catalyst.schemas import (
     ApplicationCreate,
+    ApplicationEventRead,
     ApplicationRead,
     ApplicationUpdate,
     JobCreate,
     JobRead,
     Page,
+    StageTransition,
 )
 from career_catalyst.services import ApplicationService, JobService
 
@@ -64,3 +66,19 @@ async def update_application(
 ) -> ApplicationRead:
     application = await ApplicationService(session).update(application_id, data)
     return ApplicationRead.model_validate(application)
+
+
+@router.post("/applications/{application_id}/transitions", tags=["applications"])
+async def transition_application(
+    application_id: uuid.UUID, data: StageTransition, session: Session
+) -> ApplicationRead:
+    application = await ApplicationService(session).transition(application_id, data)
+    return ApplicationRead.model_validate(application)
+
+
+@router.get("/applications/{application_id}/events", tags=["applications"])
+async def list_application_events(
+    application_id: uuid.UUID, session: Session
+) -> list[ApplicationEventRead]:
+    events = await ApplicationService(session).list_events(application_id)
+    return [ApplicationEventRead.model_validate(e) for e in events]

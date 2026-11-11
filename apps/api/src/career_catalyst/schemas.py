@@ -51,6 +51,22 @@ class ApplicationRead(BaseModel):
     updated_at: datetime
 
 
+class StageTransition(BaseModel):
+    to: ApplicationStage
+    note: str | None = None
+
+
+class ApplicationEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    application_id: uuid.UUID
+    from_stage: ApplicationStage | None
+    to_stage: ApplicationStage
+    note: str | None
+    occurred_at: datetime
+
+
 class Page[T](BaseModel):
     items: list[T]
     limit: int
