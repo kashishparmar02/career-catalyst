@@ -4,13 +4,52 @@ Errors are raised as domain exceptions; the API layer maps them to status codes.
 """
 
 import uuid
+from collections.abc import Mapping
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from career_catalyst.models import Application, Job
-from career_catalyst.repositories import ApplicationRepository, JobRepository
-from career_catalyst.schemas import ApplicationCreate, ApplicationUpdate, JobCreate
+from career_catalyst.models import Application, ApplicationEvent, ApplicationStage, Job
+from career_catalyst.repositories import (
+    ApplicationEventRepository,
+    ApplicationRepository,
+    JobRepository,
+)
+from career_catalyst.schemas import (
+    ApplicationCreate,
+    ApplicationUpdate,
+    JobCreate,
+    StageTransition,
+)
+
+# The whole stage machine: each stage maps to the stages it may move to next.
+# "interview" may repeat for another round; rejected and withdrawn are final.
+ALLOWED_TRANSITIONS: Mapping[ApplicationStage, frozenset[ApplicationStage]] = {
+    ApplicationStage.SAVED: frozenset({ApplicationStage.APPLIED, ApplicationStage.WITHDRAWN}),
+    ApplicationStage.APPLIED: frozenset(
+        {
+            ApplicationStage.ASSESSMENT,
+            ApplicationStage.INTERVIEW,
+            ApplicationStage.OFFER,
+            ApplicationStage.REJECTED,
+            ApplicationStage.WITHDRAWN,
+        }
+    ),
+    ApplicationStage.ASSESSMENT: frozenset(
+        {ApplicationStage.INTERVIEW, ApplicationStage.REJECTED, ApplicationStage.WITHDRAWN}
+    ),
+    ApplicationStage.INTERVIEW: frozenset(
+        {
+            ApplicationStage.INTERVIEW,
+            ApplicationStage.OFFER,
+            ApplicationStage.REJECTED,
+            ApplicationStage.WITHDRAWN,
+        }
+    ),
+    ApplicationStage.OFFER: frozenset({ApplicationStage.WITHDRAWN}),
+    ApplicationStage.REJECTED: frozenset(),
+    ApplicationStage.WITHDRAWN: frozenset(),
+}
 
 
 class NotFoundError(Exception):
@@ -19,6 +58,16 @@ class NotFoundError(Exception):
 
 class ConflictError(Exception):
     pass
+
+
+class InvalidTransitionError(Exception):
+    def __init__(self, current: ApplicationStage, requested: ApplicationStage) -> None:
+        # Listed in enum order (saved first), not set order, so the message is stable.
+        allowed = [s.value for s in ApplicationStage if s in ALLOWED_TRANSITIONS[current]]
+        super().__init__(
+            f"Cannot move an application from {current.value} to {requested.value}. "
+            f"Allowed next stages: {', '.join(allowed) or 'none (final stage)'}"
+        )
 
 
 class JobService:
@@ -57,9 +106,13 @@ class ApplicationService:
         self.session = session
         self.jobs = JobRepository(session)
         self.applications = ApplicationRepository(session)
+        self.events = ApplicationEventRepository(session)
 
     async def create(self, data: ApplicationCreate) -> Application:
-        """Start tracking a job (stage "saved"). Only one application per job is allowed."""
+        """Start tracking a job (stage "saved") and record that as the first history event.
+
+        Only one application per job is allowed.
+        """
         if await self.jobs.get(data.job_id) is None:
             raise NotFoundError(f"Job {data.job_id} not found")
         if await self.applications.get_by_job(data.job_id):
@@ -67,6 +120,9 @@ class ApplicationService:
         application = Application(**data.model_dump())
         try:
             await self.applications.add(application)
+            await self.events.add(
+                ApplicationEvent(application_id=application.id, to_stage=application.stage)
+            )
             await self.session.commit()
         except IntegrityError as exc:
             await self.session.rollback()
@@ -88,6 +144,35 @@ class ApplicationService:
         await self.session.commit()
         await self.session.refresh(application)
         return application
+
+    async def transition(self, application_id: uuid.UUID, data: StageTransition) -> Application:
+        """Move an application to a new stage and record the move in its history.
+
+        The row is locked (SELECT ... FOR UPDATE) before validating, so concurrent transitions
+        run one at a time and each validates against the stage the previous one left behind.
+        """
+        application = await self.applications.get_for_update(application_id)
+        if application is None:
+            raise NotFoundError(f"Application {application_id} not found")
+        if data.to not in ALLOWED_TRANSITIONS[application.stage]:
+            raise InvalidTransitionError(application.stage, data.to)
+        await self.events.add(
+            ApplicationEvent(
+                application_id=application.id,
+                from_stage=application.stage,
+                to_stage=data.to,
+                note=data.note,
+            )
+        )
+        application.stage = data.to
+        await self.session.commit()
+        await self.session.refresh(application)
+        return application
+
+    async def list_events(self, application_id: uuid.UUID) -> list[ApplicationEvent]:
+        """Return the stage history of one application, oldest first."""
+        await self.get(application_id)
+        return await self.events.list_for_application(application_id)
 
     async def list(self, limit: int, offset: int) -> list[Application]:
         return await self.applications.list(limit, offset)

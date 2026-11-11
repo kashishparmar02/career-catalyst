@@ -29,6 +29,6 @@ def migrated() -> None:
 @pytest.fixture
 async def client(migrated: None) -> AsyncIterator[AsyncClient]:
     async with get_engine().begin() as conn:
-        await conn.execute(text("TRUNCATE applications, jobs"))
+        await conn.execute(text("TRUNCATE application_events, applications, jobs"))
     async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as c:
         yield c

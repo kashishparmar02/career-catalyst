@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from career_catalyst.api import health, v1
 from career_catalyst.config import get_settings
-from career_catalyst.services import ConflictError, NotFoundError
+from career_catalyst.services import ConflictError, InvalidTransitionError, NotFoundError
 
 
 def create_app() -> FastAPI:
@@ -23,6 +23,12 @@ def create_app() -> FastAPI:
     @app.exception_handler(ConflictError)
     async def conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
+
+    @app.exception_handler(InvalidTransitionError)
+    async def invalid_transition(_: Request, exc: InvalidTransitionError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
+        )
 
     return app
 

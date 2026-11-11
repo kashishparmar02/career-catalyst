@@ -3,7 +3,7 @@
 Track every job application in one place, see how well each job matches your profile, and keep your
 search moving: from saved, to applied, to interview, to offer.
 
-> Work in progress. Jobs and applications are tracked through a versioned REST API; stage history, job intake and matching are next.
+> Work in progress. Jobs, applications and their stage history are tracked through a versioned REST API; job intake and matching are next.
 
 ## Architecture
 
@@ -31,6 +31,8 @@ API docs: http://localhost:8000/docs
 | POST | `/api/v1/applications` | Start tracking a job (one application per job → 409) |
 | GET | `/api/v1/applications`, `/api/v1/applications/{id}` | List or fetch applications |
 | PATCH | `/api/v1/applications/{id}` | Update referral and notes (only the fields sent) |
+| POST | `/api/v1/applications/{id}/transitions` | Move to the next stage, e.g. `{"to": "interview", "note": "Round 1"}` (not allowed → 422 listing the allowed stages) |
+| GET | `/api/v1/applications/{id}/events` | Stage history, oldest first |
 
 ## Develop
 
@@ -54,5 +56,10 @@ uv run ruff check . && uv run mypy src
   race, so duplicates are impossible rather than unlikely.
 - **Migrations run on container start.** `alembic upgrade head` is idempotent, so restarts are safe; every migration is
   tested up → down → up.
-- **Layers:** routes only translate HTTP, services hold the rules and raise domain errors (mapped to 404/409 in one place),
+- **Stages are an explicit state machine with full history.** The allowed moves live in one table in the service layer
+  (saved → applied → assessment / interview → offer; rejected and withdrawn are final), and every move is written to
+  `application_events` in the same transaction as the stage change. A transition locks the application row
+  (`SELECT ... FOR UPDATE`) before checking the rule, so two simultaneous requests run one after the other and the second
+  is judged against the first one's result instead of both applying.
+- **Layers:** routes only translate HTTP, services hold the rules and raise domain errors (mapped to 404/409/422 in one place),
   repositories are the only code that writes SQL.
