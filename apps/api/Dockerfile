@@ -6,6 +6,8 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN uv sync --frozen --no-dev
 
 # Runtime stage: only the virtualenv and source, running as a non-root user.
@@ -17,4 +19,5 @@ ENV PATH="/app/.venv/bin:$PATH"
 USER app
 EXPOSE 8000
 HEALTHCHECK CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
-CMD ["uvicorn", "career_catalyst.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Apply pending migrations, then serve. Safe to repeat: Alembic skips migrations already applied.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn career_catalyst.main:app --host 0.0.0.0 --port 8000"]
