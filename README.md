@@ -3,7 +3,7 @@
 Track every job application in one place, see how well each job matches your profile, and keep your
 search moving: from saved, to applied, to interview, to offer.
 
-> Work in progress. The API skeleton is in place; application tracking, job intake and matching are next.
+> Work in progress. Jobs and applications are tracked through a versioned REST API; stage history, job intake and matching are next.
 
 ## Architecture
 
@@ -24,6 +24,14 @@ curl localhost:8000/ready    # {"status":"ready","database":"up"}
 
 API docs: http://localhost:8000/docs
 
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/api/v1/jobs` | Save a job posting (same URL twice → 409) |
+| GET | `/api/v1/jobs`, `/api/v1/jobs/{id}` | List (paginated) or fetch postings |
+| POST | `/api/v1/applications` | Start tracking a job (one application per job → 409) |
+| GET | `/api/v1/applications`, `/api/v1/applications/{id}` | List or fetch applications |
+| PATCH | `/api/v1/applications/{id}` | Update referral and notes (only the fields sent) |
+
 ## Develop
 
 ```bash
@@ -41,3 +49,10 @@ uv run ruff check . && uv run mypy src
   Restarting a container because its database is down would make things worse, which is why the two are separate.
 - **Lazy database engine.** The engine is created on first use, so importing the app for tests or tooling never
   opens a connection.
+- **Uniqueness lives in the database.** "One posting per URL" and "one application per job" are unique constraints, not just
+  code checks. The service checks first for a friendly error, and still handles the constraint violation when two requests
+  race, so duplicates are impossible rather than unlikely.
+- **Migrations run on container start.** `alembic upgrade head` is idempotent, so restarts are safe; every migration is
+  tested up → down → up.
+- **Layers:** routes only translate HTTP, services hold the rules and raise domain errors (mapped to 404/409 in one place),
+  repositories are the only code that writes SQL.

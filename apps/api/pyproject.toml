@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.11",
     "sqlalchemy[asyncio]>=2.0.44",
     "asyncpg>=0.30",
+    "alembic>=1.20.1",
 ]
 
 [dependency-groups]
@@ -30,7 +31,8 @@ packages = ["src/career_catalyst"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 markers = ["integration: needs a running PostgreSQL (DATABASE_URL)"]
 
 [tool.ruff]
