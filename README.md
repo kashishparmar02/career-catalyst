@@ -3,7 +3,7 @@
 Track every job application in one place, see how well each job matches your profile, and keep your
 search moving: from saved, to applied, to interview, to offer.
 
-> Work in progress. Jobs, applications and their stage history are tracked through a versioned REST API; job intake and matching are next.
+> Work in progress. Jobs, applications and their stage history are tracked through a versioned REST API; jobs can be imported from a Greenhouse, Lever or Ashby link; matching is next.
 
 ## Architecture
 
@@ -27,6 +27,7 @@ API docs: http://localhost:8000/docs
 | Method | Path | What it does |
 |---|---|---|
 | POST | `/api/v1/jobs` | Save a job posting (same URL twice → 409) |
+| POST | `/api/v1/jobs/import` | Save a job from a Greenhouse, Lever or Ashby link, e.g. `{"url": "https://jobs.lever.co/acme/<id>"}` (other sites → 422, closed posting → 404, job board down → 502) |
 | GET | `/api/v1/jobs`, `/api/v1/jobs/{id}` | List (paginated) or fetch postings |
 | POST | `/api/v1/applications` | Start tracking a job (one application per job → 409) |
 | GET | `/api/v1/applications`, `/api/v1/applications/{id}` | List or fetch applications |
@@ -61,5 +62,11 @@ uv run ruff check . && uv run mypy src
   `application_events` in the same transaction as the stage change. A transition locks the application row
   (`SELECT ... FOR UPDATE`) before checking the rule, so two simultaneous requests run one after the other and the second
   is judged against the first one's result instead of both applying.
+- **One adapter per job board, behind a strict host allow-list.** Greenhouse, Lever and Ashby each sit behind the same small
+  `JobSource` interface; what varies is which links they recognise, which public JSON API they call and how its fields map
+  to a job. A registry picks the adapter by URL, so adding a board is one new class. The pasted link is only parsed, never
+  fetched: its host must exactly match a known board (so `greenhouse.io.evil.com` is rejected) and the request goes to the
+  provider's fixed API host, which rules out server-side request forgery. Links are normalised to one canonical posting
+  URL, so the same job pasted twice (with tracking parameters or different casing) is still a 409.
 - **Layers:** routes only translate HTTP, services hold the rules and raise domain errors (mapped to 404/409/422 in one place),
   repositories are the only code that writes SQL.

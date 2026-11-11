@@ -1,0 +1,16 @@
+{
+  "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/4012345002",
+  "internal_job_id": 3012345002,
+  "location": {"name": "Remote, India"},
+  "metadata": [],
+  "id": 4012345002,
+  "updated_at": "2026-11-01T10:00:00-04:00",
+  "requisition_id": "ENG-101",
+  "title": "Senior Backend Engineer",
+  "company_name": "Acme",
+  "first_published": "2026-10-20T09:00:00-04:00",
+  "language": "en",
+  "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;p&gt;Acme builds &lt;strong&gt;tools for teams&lt;/strong&gt; &amp;amp; their data.&lt;/p&gt;&lt;/div&gt;&lt;h2&gt;What you will do&lt;/h2&gt;&lt;ul&gt;&lt;li&gt;Design APIs&lt;/li&gt;&lt;li&gt;Own services in production&lt;/li&gt;&lt;/ul&gt;&lt;script&gt;track()&lt;/script&gt;",
+  "departments": [{"id": 1, "name": "Engineering", "child_ids": [], "parent_id": null}],
+  "offices": [{"id": 2, "name": "India", "location": null, "child_ids": [], "parent_id": null}]
+}

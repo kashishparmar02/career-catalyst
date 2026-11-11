@@ -3,6 +3,7 @@
 import uuid
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,15 +14,18 @@ from career_catalyst.schemas import (
     ApplicationRead,
     ApplicationUpdate,
     JobCreate,
+    JobImport,
     JobRead,
     Page,
     StageTransition,
 )
 from career_catalyst.services import ApplicationService, JobService
+from career_catalyst.sources import get_http_client
 
 router = APIRouter(prefix="/api/v1")
 
 Session = Annotated[AsyncSession, Depends(get_session)]
+HttpClient = Annotated[httpx.AsyncClient, Depends(get_http_client)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 Offset = Annotated[int, Query(ge=0)]
 
@@ -29,6 +33,12 @@ Offset = Annotated[int, Query(ge=0)]
 @router.post("/jobs", status_code=status.HTTP_201_CREATED, tags=["jobs"])
 async def create_job(data: JobCreate, session: Session) -> JobRead:
     return JobRead.model_validate(await JobService(session).create(data))
+
+
+@router.post("/jobs/import", status_code=status.HTTP_201_CREATED, tags=["jobs"])
+async def import_job(data: JobImport, session: Session, client: HttpClient) -> JobRead:
+    """Save a job from a Greenhouse, Lever or Ashby posting link."""
+    return JobRead.model_validate(await JobService(session).import_from_url(str(data.url), client))
 
 
 @router.get("/jobs", tags=["jobs"])

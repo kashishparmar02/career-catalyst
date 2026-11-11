@@ -6,6 +6,7 @@ Errors are raised as domain exceptions; the API layer maps them to status codes.
 import uuid
 from collections.abc import Mapping
 
+import httpx
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,7 @@ from career_catalyst.schemas import (
     JobCreate,
     StageTransition,
 )
+from career_catalyst.sources import fetch_posting
 
 # The whole stage machine: each stage maps to the stages it may move to next.
 # "interview" may repeat for another round; rejected and withdrawn are final.
@@ -90,6 +92,13 @@ class JobService:
             raise ConflictError(f"A job with URL {url} already exists") from exc
         await self.session.refresh(job)
         return job
+
+    async def import_from_url(self, url: str, client: httpx.AsyncClient) -> Job:
+        """Fetch a posting from its job board and store it exactly like a manual create.
+
+        The canonical posting URL is stored, so the same job pasted twice is a 409 conflict.
+        """
+        return await self.create(await fetch_posting(url, client))
 
     async def get(self, job_id: uuid.UUID) -> Job:
         job = await self.jobs.get(job_id)

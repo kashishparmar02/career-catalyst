@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
@@ -27,8 +28,13 @@ def migrated() -> None:
 
 
 @pytest.fixture
-async def client(migrated: None) -> AsyncIterator[AsyncClient]:
+def app() -> FastAPI:
+    return create_app()
+
+
+@pytest.fixture
+async def client(migrated: None, app: FastAPI) -> AsyncIterator[AsyncClient]:
     async with get_engine().begin() as conn:
         await conn.execute(text("TRUNCATE application_events, applications, jobs"))
-    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://test") as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c

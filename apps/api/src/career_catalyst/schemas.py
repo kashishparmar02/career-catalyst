@@ -16,6 +16,10 @@ class JobCreate(BaseModel):
     description: str | None = None
 
 
+class JobImport(BaseModel):
+    url: HttpUrl
+
+
 class JobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

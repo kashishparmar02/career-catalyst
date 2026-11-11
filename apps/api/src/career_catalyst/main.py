@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from career_catalyst.api import health, v1
 from career_catalyst.config import get_settings
 from career_catalyst.services import ConflictError, InvalidTransitionError, NotFoundError
+from career_catalyst.sources import PostingNotFoundError, UnsupportedSourceError, UpstreamError
 
 
 def create_app() -> FastAPI:
@@ -20,6 +21,10 @@ def create_app() -> FastAPI:
     async def not_found(_: Request, exc: NotFoundError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
 
+    @app.exception_handler(PostingNotFoundError)
+    async def posting_not_found(_: Request, exc: PostingNotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)})
+
     @app.exception_handler(ConflictError)
     async def conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": str(exc)})
@@ -29,6 +34,16 @@ def create_app() -> FastAPI:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
         )
+
+    @app.exception_handler(UnsupportedSourceError)
+    async def unsupported_source(_: Request, exc: UnsupportedSourceError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": str(exc)}
+        )
+
+    @app.exception_handler(UpstreamError)
+    async def upstream_error(_: Request, exc: UpstreamError) -> JSONResponse:
+        return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content={"detail": str(exc)})
 
     return app
 
